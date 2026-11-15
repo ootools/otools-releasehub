@@ -2300,7 +2300,14 @@ mod tests {
         service.backend.save_connected(false).unwrap();
         assert!(!read_connected(&root).unwrap());
         assert!(validate_auth_root(Path::new("relative/account")).is_err());
-        assert!(validate_auth_root(&root.join("..").join("elsewhere")).is_err());
+        // PathBuf::join normalizes parent segments for verbatim Windows paths;
+        // supply the raw path so this test actually exercises the validator.
+        let separator = std::path::MAIN_SEPARATOR;
+        let traversal = PathBuf::from(format!(
+            "{}{separator}..{separator}elsewhere",
+            root.display()
+        ));
+        assert!(validate_auth_root(&traversal).is_err());
     }
 
     #[test]
