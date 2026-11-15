@@ -154,7 +154,7 @@ impl Core {
                         .as_ref()
                         .is_some_and(|r| r.assets.iter().any(|a| a.id == id && a.compatible))
                     {
-                        return Err("附件不适用于当前项目或 Windows x64".into());
+                        return Err("附件不适用于当前项目或系统架构".into());
                     }
                 }
                 p.selected_asset_id = selected;

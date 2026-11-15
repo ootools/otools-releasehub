@@ -1,11 +1,11 @@
 node_modules/
-dist/
+/dist/
 dist-pack/
 native/target/
-lib/
-tools/
+/lib/
+/tools/
 .cache/
-artifacts/
+/artifacts/
 playwright-report/
 test-results/
 .DS_Store
