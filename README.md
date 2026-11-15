@@ -47,3 +47,11 @@ pnpm dev # 127.0.0.1:6567，仅用于 OTools dev plugin
 ## 许可
 
 MIT；保留原作者 Copyright。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 发布
+
+`build-plugin.yml` 在六个平台执行测试、构建、官方 CLI 校验与 `.oplg` 验证。`release-plugin.yml` 只接受本仓库 main 的成功构建 Run ID，重新校验六份不可变产物后在 GitHub 内部发布 Release，tag 指向实际测试的源提交，不重新编译或混用本地产物。可手动运行：
+
+```sh
+gh workflow run release-plugin.yml -f build_run_id=<成功构建ID> -f version=0.1.0
+```

@@ -1,0 +1,86 @@
+name: release-plugin
+run-name: ReleaseHub ${{ inputs.version }} from verified build ${{ inputs.build_run_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful build-plugin Actions run ID
+        required: true
+      version:
+        description: Plugin version matching the verified artifact manifest
+        required: true
+        default: '0.1.0'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve successful same-repository build
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ inputs.build_run_id }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID" > /tmp/build.json
+          jq -e --arg repo "$GH_REPO" '.status == "completed" and .conclusion == "success" and .path == ".github/workflows/build-plugin.yml" and .head_repository.full_name == $repo and .head_branch == "main" and (.event == "push" or .event == "workflow_dispatch")' /tmp/build.json
+          echo "sha=$(jq -r .head_sha /tmp/build.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.build.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-oplg
+          path: dist-pack
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify immutable native packages
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          node scripts/verify-plugin.mjs dist-pack
+          VERSION="$VERSION" node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          import {NATIVE_TARGETS} from './scripts/package-matrix.mjs';
+          const manifest=JSON.parse(fs.readFileSync('plugin.json','utf8'));
+          if(manifest.version!==process.env.VERSION||manifest.packid!=='otools-releasehub')throw new Error('Version mismatch');
+          const sums=[];
+          for(const target of NATIVE_TARGETS){
+            const directory=`dist-pack/${target.suffix}`;
+            const expected=`${manifest.packid}-${manifest.version}-${target.suffix}.oplg`;
+            const files=fs.readdirSync(directory).filter(name=>name.endsWith('.oplg'));
+            if(files.length!==1||files[0]!==expected)throw new Error('Platform package missing');
+            const line=fs.readFileSync(`${directory}/SHA256SUMS`,'utf8').split('\n').find(line=>line.endsWith(`  ${expected}`));
+            if(!line)throw new Error('Package checksum missing');sums.push(line);
+          }
+          fs.writeFileSync('SHA256SUMS',sums.join('\n')+'\n');
+          NODE
+      - name: Publish verified GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ steps.build.outputs.sha }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/release-notes.md <<NOTES
+          ## ReleaseHub · 追新 — OTools 独立插件 v$VERSION
+          移植 huai-bot/releasehub 大部分非 AI 功能：软件库、发行追踪、更新检查、下载校验与重试、受管版本、GitHub 搜索/Stars/仓库/动态、主题及订阅导入导出。
+          无 AI/Agent/MCP、独立客户端托盘或自动安装。使用 OTools Panel，数据保存在插件专属目录。
+          六个平台包包含真实原生动态库及校验锁定的官方 GitHub CLI 2.100.0；请按系统/架构选择。
+          登录支持设备授权与本机系统凭据库 PAT；可选外部 OAuth 回调需使用含安全 deepLinks API 的新版 OTools 宿主（代码已在宿主 main）。无内置 OAuth 服务或 client secret。
+          安装/执行仍需确认；非 ZIP 便携格式只下载，不冒充已安装。
+          验证构建：https://github.com/$GH_REPO/actions/runs/$BUILD_RUN_ID
+          Source: $SOURCE_SHA
+          NOTES
+          gh release create "plugin-otools-releasehub-v$VERSION" dist-pack/*/*.oplg SHA256SUMS logo.svg dist-pack/macos/plugin.json --target "$SOURCE_SHA" --title "ReleaseHub 追新 v$VERSION" --notes-file /tmp/release-notes.md
