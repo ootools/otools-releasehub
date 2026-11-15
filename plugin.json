@@ -1,0 +1,3 @@
+{
+  "uuid":"otools-releasehub","packid":"otools-releasehub","displayName":"ReleaseHub","displayNameCN":"追新","developerName":"OTools","summary":"GitHub 软件更新中心：订阅发行、更新检查、下载与版本管理、Stars、仓库和动态；不含 AI 功能。","version":"0.1.0","minOtoolsVersion":"0.9.4","entry":"dist/index.html","devUrl":"http://127.0.0.1:6567","quickDev":true,"openMode":"panel","panelWidth":1120,"panelHeight":740,"logo":"logo.svg","icon":"📦","hasAd":false,"inPluginPurchase":false,"openInBrowser":false,"screenshots":[],"permissions":[],"key":["releasehub","追新","github","软件更新","releases","star","下载","版本管理"],"native":{"enabled":true,"libDir":"lib","autoReload":false}
+}

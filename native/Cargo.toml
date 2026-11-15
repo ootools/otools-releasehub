@@ -1,0 +1,32 @@
+[package]
+name = "otools-releasehub-native"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+[lib]
+name = "otools_releasehub_native"
+crate-type = ["cdylib", "rlib"]
+[workspace]
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "fs", "io-util", "process"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+semver = "1"
+futures-util = "0.3"
+url = "2"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+fs2 = "0.4"
+dirs = "6"
+[dev-dependencies]
+tempfile = "3"
+[profile.release]
+panic = "unwind"
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"

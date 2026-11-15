@@ -1,0 +1,4 @@
+{
+  "name": "otools-releasehub", "version": "0.1.0", "private": true, "type": "module", "license": "MIT", "packageManager": "pnpm@11.25.0",
+  "scripts": {"dev":"pnpm --dir web dev","build":"pnpm build:web && pnpm build:native","build:web":"node scripts/build-web.mjs","build:native":"node scripts/build-native.mjs","test":"pnpm --dir web test","typecheck":"pnpm --dir web check","pack":"node scripts/pack-plugin.mjs","verify":"node scripts/verify-plugin.mjs"}
+}

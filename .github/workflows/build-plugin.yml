@@ -1,0 +1,94 @@
+name: build-plugin
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: macos-15, platform: macos, arch: arm64, artifact: macos, library: macOS-arm64.dylib}
+          - {os: macos-15-intel, platform: macos, arch: x64, artifact: macos-intel, library: macOS-x86_64.dylib}
+          - {os: windows-latest, platform: windows, arch: x64, artifact: windows, library: Windows-x64.dll}
+          - {os: windows-11-arm, platform: windows, arch: arm64, artifact: windows-arm, library: Windows-arm64.dll}
+          - {os: ubuntu-latest, platform: linux, arch: x64, artifact: linux, library: Linux-x64.so}
+          - {os: ubuntu-24.04-arm, platform: linux, arch: arm64, artifact: linux-arm, library: Linux-arm64.so}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native -> target
+          key: releasehub-${{ matrix.artifact }}
+      - name: Linux credential dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - run: cargo test --locked --manifest-path native/Cargo.toml
+      - run: node scripts/build-native.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+      - run: node scripts/prepare-github-cli.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+      - name: Validate built native ABI
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = macos ]; then
+            python3 scripts/abi-smoke.py "lib/${{ matrix.library }}"
+          elif [ "${{ matrix.platform }}" = linux ]; then
+            python3 scripts/abi-smoke.py "lib/${{ matrix.library }}"
+          else
+            python scripts/abi-smoke.py "lib/${{ matrix.library }}"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.artifact }}
+          path: |
+            lib/${{ matrix.library }}
+            tools/${{ matrix.artifact }}/
+          if-no-files-found: error
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: pnpm/action-setup@v4
+        with: {version: '11.25.0'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: node --test scripts/packaging.test.mjs
+      - run: pnpm build:web
+      - uses: actions/upload-artifact@v4
+        with: {name: plugin-web, path: dist/, if-no-files-found: error}
+  package:
+    needs: [native, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/download-artifact@v4
+        with: {name: plugin-web, path: dist}
+      - uses: actions/download-artifact@v4
+        with: {pattern: 'native-*', merge-multiple: true, path: '.'}
+      - run: sudo apt-get update && sudo apt-get install -y llvm
+      - name: Package every verified platform
+        run: |
+          node scripts/pack-plugin.mjs --platform macos --arch arm64
+          node scripts/pack-plugin.mjs --platform macos --arch x64
+          node scripts/pack-plugin.mjs --platform windows --arch x64
+          node scripts/pack-plugin.mjs --platform windows --arch arm64
+          node scripts/pack-plugin.mjs --platform linux --arch x64
+          node scripts/pack-plugin.mjs --platform linux --arch arm64
+          node scripts/verify-plugin.mjs dist-pack
+      - uses: actions/upload-artifact@v4
+        with: {name: plugin-oplg, path: dist-pack/, if-no-files-found: error}
